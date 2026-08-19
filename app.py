@@ -2,6 +2,8 @@
 import os
 import pandas as pd
 import plotly.express as px
+from pdfminer.high_level import extract_pages
+from pdfminer.layout import LTTextContainer
 import streamlit as st
 
 st.set_page_config(
@@ -10,6 +12,160 @@ st.set_page_config(
 
 NOME_FILE_EXCEL = "Handicap_2026.xlsx"
 NOME_FILE_CAMPI = "campi.json"
+
+
+# --- FUNZIONE DI PARSING AUTOMATICO DEL PDF FEDERGOLF ---
+def genera_json_da_pdf(pdf_path):
+  HEADER_WORDS = {
+      "TEE UOMINI",
+      "TEE DONNE",
+      "NERO",
+      "BIANCO",
+      "GIALLO",
+      "VERDE",
+      "BLU",
+      "ROSSO",
+      "ARANCIO",
+      "Circolo",
+      "Percorso",
+      "PAR",
+      "CR",
+      "Slope",
+      "Ci sono 911 percorsi.",
+  }
+  pages = list(extract_pages(pdf_path))
+  dataset = []
+  last_circolo = ""
+
+  for page in pages:
+    items = []
+    for element in page:
+      if isinstance(element, LTTextContainer):
+        t = element.get_text().strip()
+        if t and t not in HEADER_WORDS:
+          items.append({
+              "x0": element.bbox[0],
+              "y0": element.bbox[1],
+              "x1": element.bbox[2],
+              "y1": element.bbox[3],
+              "text": t,
+          })
+
+    data_items = [
+        it
+        for it in items
+        if it["y1"] < 765 and "TEE UOMINI" not in it["text"]
+    ]
+    data_items.sort(key=lambda item: -item["y1"])
+
+    rows = []
+    for item in data_items:
+      found = False
+      for row in rows:
+        if abs(row["y"] - item["y1"]) < 5:
+          row["items"].append(item)
+          found = True
+          break
+      if not found:
+        rows.append({"y": item["y1"], "items": [item]})
+
+    for row in rows:
+      row["items"].sort(key=lambda item: item["x0"])
+      circolo_parts, percorso_parts = [], []
+      par_val = None
+      tees_val = {}
+
+      for it in row["items"]:
+        x = it["x0"]
+        t = it["text"].replace("\n", " ").strip()
+
+        if x < 105 and not t.replace(".", "").isdigit():
+          circolo_parts.append(t)
+        elif 105 <= x < 175 and not t.replace(".", "").isdigit():
+          percorso_parts.append(t)
+        elif 175 <= x < 200 and t.isdigit():
+          try:
+            par_val = float(t)
+          except Exception:
+            pass
+        else:
+          try:
+            val = float(t)
+            if 200 <= x < 225:
+              tees_val.setdefault("Nero", {})["CR"] = val
+            elif 225 <= x < 255:
+              tees_val.setdefault("Nero", {})["SR"] = val
+            elif 255 <= x < 280:
+              tees_val.setdefault("Bianco", {})["CR"] = val
+            elif 280 <= x < 310:
+              tees_val.setdefault("Bianco", {})["SR"] = val
+            elif 310 <= x < 338:
+              tees_val.setdefault("Giallo", {})["CR"] = val
+            elif 338 <= x < 365:
+              tees_val.setdefault("Giallo", {})["SR"] = val
+            elif 365 <= x < 392:
+              tees_val.setdefault("Verde", {})["CR"] = val
+            elif 392 <= x < 420:
+              tees_val.setdefault("Verde", {})["SR"] = val
+            elif 420 <= x < 448:
+              tees_val.setdefault("Blu", {})["CR"] = val
+            elif 448 <= x < 475:
+              tees_val.setdefault("Blu", {})["SR"] = val
+            elif 475 <= x < 502:
+              tees_val.setdefault("Rosso", {})["CR"] = val
+            elif 502 <= x < 530:
+              tees_val.setdefault("Rosso", {})["SR"] = val
+            elif 530 <= x < 555:
+              tees_val.setdefault("Arancio", {})["CR"] = val
+            elif 555 <= x < 585:
+              tees_val.setdefault("Arancio", {})["SR"] = val
+          except Exception:
+            pass
+
+      c_name = " ".join(circolo_parts).strip()
+      p_name = " ".join(percorso_parts).strip()
+      if c_name:
+        last_circolo = c_name
+      else:
+        c_name = last_circolo
+
+      if c_name and par_val and tees_val:
+        buche = (
+            9
+            if (
+                "9" in p_name.lower()
+                or "nove" in p_name.lower()
+                or par_val < 50
+            )
+            else 18
+        )
+        valid_tees = {
+            k: v for k, v in tees_val.items() if "CR" in v and "SR" in v
+        }
+        if valid_tees:
+          dataset.append({
+              "Circolo": c_name,
+              "Percorso": p_name if p_name else "Percorso Standard",
+              "Buche": buche,
+              "Par": par_val,
+              "Tees": valid_tees,
+          })
+
+  seen = set()
+  dataset_unique = []
+  for d in dataset:
+    key = (
+        d["Circolo"],
+        d["Percorso"],
+        d["Buche"],
+        d["Par"],
+        json.dumps(d["Tees"], sort_keys=True),
+    )
+    if key not in seen:
+      seen.add(key)
+      dataset_unique.append(d)
+
+  return dataset_unique
 
 
 # --- CARICAMENTO E SALVATAGGIO DATI EXCEL ---
@@ -29,7 +185,6 @@ def load_data():
     df["Data"] = pd.to_datetime(df["Data"])
     return df
 
-  # Fallback per intestazione su riga 2
   df_h1 = pd.read_excel(filename, sheet_name="Foglio2", header=1)
   if "Data" in df_h1.columns and "SD" in df_h1.columns:
     df_h1["Data"] = pd.to_datetime(df_h1["Data"])
@@ -47,7 +202,7 @@ def save_data(df_to_save):
   st.cache_data.clear()
 
 
-# --- ANAGRAFICA CAMPI DI GIOCO (FEDERGOLF CON TEE) ---
+# --- ANAGRAFICA CAMPI DI GIOCO ---
 def load_campi():
   if os.path.exists(NOME_FILE_CAMPI):
     try:
@@ -56,7 +211,23 @@ def load_campi():
     except Exception:
       pass
 
-  # Fallback minimale se campi.json non è presente
+  # Estrazione dal PDF se presente
+  pdf_file = None
+  for f in os.listdir("."):
+    if f.endswith(".pdf"):
+      pdf_file = f
+      break
+
+  if pdf_file:
+    try:
+      campi_pdf = genera_json_da_pdf(pdf_file)
+      if campi_pdf:
+        save_campi(campi_pdf)
+        return campi_pdf
+    except Exception:
+      pass
+
+  # Fallback di sicurezza
   default_db = [{
       "Circolo": "MONTEVEGLIO ASD",
       "Percorso": "18 Buche",
@@ -233,7 +404,6 @@ if not df.empty and "SD" in df.columns:
   with tab_sim:
     st.subheader("🔮 Simula Impatto Prossima Gara")
 
-    # Lista circoli unici
     circoli_unici = sorted(list(set(c["Circolo"] for c in db_campi)))
 
     col_sel1, col_sel2, col_sel3 = st.columns(3)
@@ -248,7 +418,6 @@ if not df.empty and "SD" in df.columns:
           "1. Seleziona Circolo", circoli_unici, index=idx_def_circolo
       )
 
-    # Filtro percorsi disponibili per il circolo selezionato
     percorsi_disponibili = [c for c in db_campi if c["Circolo"] == sel_circolo]
     nomi_percorsi = [p["Percorso"] for p in percorsi_disponibili]
 
@@ -270,7 +439,6 @@ if not df.empty and "SD" in df.columns:
           index=idx_def_tee,
       )
 
-    # Estrazione automatica parametri CR, SR, Par, Buche dal Tee selezionato
     auto_par = float(obj_percorso["Par"])
     auto_buche = int(obj_percorso["Buche"])
     auto_cr = float(obj_percorso["Tees"][sel_tee]["CR"])
@@ -374,7 +542,6 @@ if not df.empty and "SD" in df.columns:
         " Puoi modificare o aggiungere campi con i relativi Tee di partenza."
     )
 
-    # Conversione per editor tabellare
     rows_editor = []
     for c in db_campi:
       for color_tee, vals in c.get("Tees", {}).items():
@@ -397,7 +564,6 @@ if not df.empty and "SD" in df.columns:
     )
 
     if st.button("💾 Salva Modifiche Anagrafica Campi"):
-      # Ricostruzione struttura nidificata
       reconstructed = {}
       for _, r in df_campi_edited.iterrows():
         key = (r["Circolo"], r["Percorso"])
@@ -522,6 +688,6 @@ if not df.empty and "SD" in df.columns:
 
 else:
   st.error(
-      "File Excel non trovato. Assicurati che 'Handicap_2026.xlsx' sia caricato"
+      "File Excel non trovato. Assicurati che 'Handicap_2026.xlsx' sia presente"
       " su GitHub."
   )
