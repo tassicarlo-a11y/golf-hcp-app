@@ -34,9 +34,16 @@ def calcola_sd_da_stableford(
 # --- CARICAMENTO DATI ---
 @st.cache_data(ttl=1)
 def load_data():
-  if os.path.exists("Handicap_2026.xlsx"):
-    df_raw = pd.read_excel("Handicap_2026.xlsx", sheet_name="Foglio2")
-    return df_raw
+  filename = None
+  # Cerca il file sia con lo spazio che con il trattino basso
+  for fname in ["Handicap_2026.xlsx", "Handicap 2026.xlsx"]:
+    if os.path.exists(fname):
+      filename = fname
+      break
+
+  if filename:
+    # header=1 indica che i nomi delle colonne partono dalla riga 2 dell'Excel
+    return pd.read_excel(filename, sheet_name="Foglio2", header=1)
   return pd.DataFrame()
 
 
