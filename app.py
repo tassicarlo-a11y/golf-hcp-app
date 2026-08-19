@@ -9,6 +9,48 @@ st.set_page_config(
 )
 
 
+# --- CARICAMENTO DATI INTELLIGENTE ---
+@st.cache_data(ttl=1)
+def load_data():
+  filename = None
+  for fname in ["Handicap_2026.xlsx", "Handicap 2026.xlsx"]:
+    if os.path.exists(fname):
+      filename = fname
+      break
+
+  if not filename:
+    return pd.DataFrame()
+
+  # Prova prima con la riga 1 come intestazione (header=0)
+  df = pd.read_excel(filename, sheet_name="Foglio2")
+  if "Data" in df.columns and "SD" in df.columns:
+    df["Data"] = pd.to_datetime(df["Data"])
+    return df
+
+  # Se non trova le colonne, prova con la riga 2 (header=1)
+  df_h1 = pd.read_excel(filename, sheet_name="Foglio2", header=1)
+  if "Data" in df_h1.columns and "SD" in df_h1.columns:
+    df_h1["Data"] = pd.to_datetime(df_h1["Data"])
+    return df_h1
+
+  return df
+
+
+def save_data(df_to_save):
+  filename = "Handicap_2026.xlsx"
+  if os.path.exists("Handicap 2026.xlsx") and not os.path.exists(
+      "Handicap_2026.xlsx"
+  ):
+    filename = "Handicap 2026.xlsx"
+
+  df_clean = df_to_save.copy()
+  if "Data" in df_clean.columns:
+    df_clean["Data"] = pd.to_datetime(df_clean["Data"]).dt.strftime("%Y-%m-%d")
+
+  df_clean.to_excel(filename, sheet_name="Foglio2", index=False)
+  st.cache_data.clear()
+
+
 # --- CARICAMENTO E SALVATAGGIO ANAGRAFICA CAMPI ---
 def load_campi():
   json_path = "campi.json"
@@ -19,7 +61,6 @@ def load_campi():
     except Exception:
       pass
 
-  # Se campi.json non esiste ancora, estraiamo i campi unici dall'Excel
   campi = []
   df_ex = load_data()
   if not df_ex.empty and "Esecutore" in df_ex.columns:
@@ -81,38 +122,6 @@ def calcola_sd_da_stableford(
   return round(sd, 1)
 
 
-# --- CARICAMENTO E SALVATAGGIO EXCEL ---
-@st.cache_data(ttl=1)
-def load_data():
-  filename = None
-  for fname in ["Handicap_2026.xlsx", "Handicap 2026.xlsx"]:
-    if os.path.exists(fname):
-      filename = fname
-      break
-
-  if filename:
-    df = pd.read_excel(filename, sheet_name="Foglio2")
-    if "Data" in df.columns:
-      df["Data"] = pd.to_datetime(df["Data"])
-    return df
-  return pd.DataFrame()
-
-
-def save_data(df_to_save):
-  filename = "Handicap_2026.xlsx"
-  if os.path.exists("Handicap 2026.xlsx") and not os.path.exists(
-      "Handicap_2026.xlsx"
-  ):
-    filename = "Handicap 2026.xlsx"
-
-  df_clean = df_to_save.copy()
-  if "Data" in df_clean.columns:
-    df_clean["Data"] = pd.to_datetime(df_clean["Data"]).dt.strftime("%Y-%m-%d")
-
-  df_clean.to_excel(filename, sheet_name="Foglio2", index=False)
-  st.cache_data.clear()
-
-
 # --- CALCOLO HANDICAP ---
 def calcola_hcp_corrente(df_in):
   if df_in.empty or "SD" not in df_in.columns:
@@ -158,7 +167,7 @@ st.title("⛳ Golf Handicap Tracker & Simulator")
 df = load_data()
 lista_campi = load_campi()
 
-if not df.empty:
+if not df.empty and "SD" in df.columns:
   hcp_attuale, ultimi_20, id_migliori = calcola_hcp_corrente(df)
   df_trend = genera_trend_storico(df)
 
@@ -212,18 +221,28 @@ if not df.empty:
           line_width=3,
           marker=dict(size=8, color="#1B5E20"),
       )
-      # Orientamento Asse Y Standard: Valori alti in alto, bassi in basso
       fig.update_layout(hovermode="x unified")
       st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("🟢 Ultimi 20 Risultati (Evidenziati i Migliori 8)")
 
-    # Selezioniamo esattamente le colonne dalla B alla H dell'Excel
-    cols_B_H = df.columns[1:8].tolist()
+    # Colonne dalla B alla H dell'Excel (Data, Gara, Esecutore, Buche, Playing HCP, Stbl, SD)
+    cols_target = [
+        "Data",
+        "Gara",
+        "Esecutore",
+        "Buche",
+        "Playing HCP",
+        "Stbl",
+        "SD",
+    ]
+    cols_display = [c for c in cols_target if c in ultimi_20.columns]
+
     ultimi_20_show = ultimi_20.copy()
-    ultimi_20_show["Data"] = pd.to_datetime(ultimi_20_show["Data"]).dt.strftime(
-        "%d/%m/%Y"
-    )
+    if "Data" in ultimi_20_show.columns:
+      ultimi_20_show["Data"] = pd.to_datetime(
+          ultimi_20_show["Data"]
+      ).dt.strftime("%d/%m/%Y")
 
     def highlight_b8(row):
       return (
@@ -233,7 +252,7 @@ if not df.empty:
       )
 
     st.dataframe(
-        ultimi_20_show[cols_B_H].style.apply(highlight_b8, axis=1),
+        ultimi_20_show[cols_display].style.apply(highlight_b8, axis=1),
         use_container_width=True,
     )
 
@@ -243,10 +262,11 @@ if not df.empty:
   with tab_sim:
     st.subheader("🔮 Simula Impatto Prossima Gara")
 
-    # Estrazione nomi campi unici salvati
-    nomi_campi_disponibili = sorted(
-        list(set([c["Nome"] for c in lista_campi]))
-    ) if lista_campi else ["MONTEVEGLIO ASD"]
+    nomi_campi_disponibili = (
+        sorted(list(set([c["Nome"] for c in lista_campi])))
+        if lista_campi
+        else ["MONTEVEGLIO ASD"]
+    )
 
     col_c1, col_c2 = st.columns(2)
     with col_c1:
@@ -256,7 +276,6 @@ if not df.empty:
     with col_c2:
       buche_selezionate = st.radio("Buche", [18, 9], horizontal=True)
 
-    # Ricerca dati del campo selezionato
     campo_info = next(
         (
             c
@@ -376,7 +395,6 @@ if not df.empty:
 
     df_campi_curr = pd.DataFrame(lista_campi)
 
-    # Editor interattivo dei campi registrati
     df_campi_edited = st.data_editor(
         df_campi_curr,
         num_rows="dynamic",
@@ -472,7 +490,6 @@ if not df.empty:
             "Playing HCP", value=10.0 if g_buche == 18 else 5.0
         )
 
-      # Recupero automatico CR, SR, Par per il campo
       c_match = next(
           (
               c
@@ -514,6 +531,6 @@ if not df.empty:
 
 else:
   st.error(
-      "File Excel non trovato. Assicurati che 'Handicap_2026.xlsx' sia salvato"
-      " nel repository GitHub."
+      "File Excel non trovato o privo della struttura corretta. Assicurati che"
+      " 'Handicap_2026.xlsx' sia caricato correttamente."
   )
