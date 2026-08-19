@@ -1,4 +1,5 @@
-﻿streamlit
+streamlit
 pandas
 openpyxl
 plotly
+pdfminer.six
