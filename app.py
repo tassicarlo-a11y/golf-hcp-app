@@ -8,100 +8,345 @@ st.set_page_config(
     page_title="Golf Handicap Tracker", page_icon="⛳", layout="wide"
 )
 
+NOME_FILE_EXCEL = "Handicap_2026.xlsx"
+NOME_FILE_CAMPI = "campi.json"
 
-# --- CARICAMENTO DATI INTELLIGENTE ---
+# --- DATABASE UFFICIALE FEDERGOLF (839 PERCORSI ESTRATTI DAL PDF) ---
+CAMPI_FEDERGOLF_DEFAULT = [
+    {"Nome": "ACAYA - 18 Buche Par 71", "Buche": 18, "Par": 71.0, "CR": 71.8, "SR": 130.0},
+    {"Nome": "ACAYA - 18 Buche Par 72", "Buche": 18, "Par": 72.0, "CR": 72.8, "SR": 133.0},
+    {"Nome": "ACAYA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 36.4, "SR": 125.0},
+    {"Nome": "ACAYA - Seconde Nove Par 35", "Buche": 9, "Par": 35.0, "CR": 35.4, "SR": 135.0},
+    {"Nome": "ACAYA - Seconde Nove Par 36", "Buche": 9, "Par": 36.0, "CR": 36.4, "SR": 141.0},
+    {"Nome": "ACQUABONA - 18 Buche", "Buche": 18, "Par": 68.0, "CR": 68.4, "SR": 132.0},
+    {"Nome": "ACQUABONA - 9 Buche", "Buche": 9, "Par": 34.0, "CR": 34.2, "SR": 132.0},
+    {"Nome": "ALBISOLA - 18 Buche par 64", "Buche": 18, "Par": 64.0, "CR": 62.4, "SR": 105.0},
+    {"Nome": "ALBISOLA - 18 buche par 65", "Buche": 18, "Par": 65.0, "CR": 62.6, "SR": 107.0},
+    {"Nome": "ALBISOLA - 18 buche par 66", "Buche": 18, "Par": 66.0, "CR": 62.8, "SR": 108.0},
+    {"Nome": "ALBISOLA - 9 Buche par 32", "Buche": 9, "Par": 32.0, "CR": 31.2, "SR": 105.0},
+    {"Nome": "ALBISOLA - 9 buche par 33", "Buche": 9, "Par": 33.0, "CR": 31.4, "SR": 108.0},
+    {"Nome": "ALPINO - 18 Buche", "Buche": 18, "Par": 69.0, "CR": 66.1, "SR": 131.0},
+    {"Nome": "ALPINO - Prime Nove", "Buche": 9, "Par": 35.0, "CR": 33.1, "SR": 132.0},
+    {"Nome": "ALTA BADIA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 69.5, "SR": 129.0},
+    {"Nome": "ALTA BADIA - 9 Buche", "Buche": 9, "Par": 36.0, "CR": 34.8, "SR": 129.0},
+    {"Nome": "AMBROSIANO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 71.9, "SR": 131.0},
+    {"Nome": "AMBROSIANO - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.9, "SR": 131.0},
+    {"Nome": "AMBROSIANO - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 36.0, "SR": 130.0},
+    {"Nome": "ANTOGNOLLA - 18 buche", "Buche": 18, "Par": 71.0, "CR": 71.0, "SR": 131.0},
+    {"Nome": "ANTOGNOLLA - 9 Buche Misto", "Buche": 9, "Par": 35.0, "CR": 35.0, "SR": 132.0},
+    {"Nome": "ANTOGNOLLA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.1, "SR": 136.0},
+    {"Nome": "ANTOGNOLLA - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 35.9, "SR": 126.0},
+    {"Nome": "AOSTA ARSANIERES - 18 Buche", "Buche": 18, "Par": 62.0, "CR": 58.6, "SR": 106.0},
+    {"Nome": "AOSTA ARSANIERES - 9 Buche", "Buche": 9, "Par": 31.0, "CR": 29.3, "SR": 106.0},
+    {"Nome": "AOSTA BRISSOGNE - 18 Buche", "Buche": 18, "Par": 60.0, "CR": 58.4, "SR": 102.0},
+    {"Nome": "AOSTA BRISSOGNE - 9 Buche", "Buche": 9, "Par": 30.0, "CR": 29.2, "SR": 102.0},
+    {"Nome": "APPIANO - GOLF & COUNTRY - 18 buche Appiano", "Buche": 18, "Par": 70.0, "CR": 72.4, "SR": 117.0},
+    {"Nome": "APPIANO - GOLF & COUNTRY - 18 Buche Carezza", "Buche": 18, "Par": 70.0, "CR": 64.8, "SR": 117.0},
+    {"Nome": "APPIANO - GOLF & COUNTRY - 9 Buche Appiano", "Buche": 9, "Par": 35.0, "CR": 36.2, "SR": 117.0},
+    {"Nome": "APPIANO - GOLF & COUNTRY - 9 Buche Carezza", "Buche": 9, "Par": 35.0, "CR": 32.4, "SR": 117.0},
+    {"Nome": "ARCHI CLAUDIO - 18 Buche Provvisorio 2025", "Buche": 18, "Par": 64.0, "CR": 62.4, "SR": 102.0},
+    {"Nome": "ARCHI CLAUDIO - Provvisorio 2025 - Buca Nuova", "Buche": 18, "Par": 64.0, "CR": 62.2, "SR": 103.0},
+    {"Nome": "ARCHI CLAUDIO - 18 Buche Provvisorio 2026", "Buche": 18, "Par": 64.0, "CR": 61.6, "SR": 96.0},
+    {"Nome": "ARCHI CLAUDIO - 9 Buche Provvisorio 2025", "Buche": 9, "Par": 32.0, "CR": 31.2, "SR": 102.0},
+    {"Nome": "ARCHI CLAUDIO - 9 Buche Provvisorio 2025 - Buca Nuova", "Buche": 9, "Par": 32.0, "CR": 31.1, "SR": 103.0},
+    {"Nome": "ARCHI CLAUDIO - 9 Buche Provvisorio 2026", "Buche": 9, "Par": 32.0, "CR": 30.8, "SR": 96.0},
+    {"Nome": "ARENZANO PINETA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 67.9, "SR": 126.0},
+    {"Nome": "ARENZANO PINETA - Nove Buche", "Buche": 9, "Par": 36.0, "CR": 34.0, "SR": 126.0},
+    {"Nome": "ARGENTA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 71.9, "SR": 125.0},
+    {"Nome": "ARGENTA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.7, "SR": 127.0},
+    {"Nome": "ARGENTA - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 36.2, "SR": 122.0},
+    {"Nome": "ARGENTARIO - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 72.4, "SR": 138.0},
+    {"Nome": "ARGENTARIO - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 36.0, "SR": 141.0},
+    {"Nome": "ARGENTARIO - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 36.4, "SR": 135.0},
+    {"Nome": "ARONA - 18 buche", "Buche": 18, "Par": 70.0, "CR": 65.9, "SR": 125.0},
+    {"Nome": "ARONA - Prime Nove", "Buche": 9, "Par": 35.0, "CR": 32.7, "SR": 127.0},
+    {"Nome": "ARZAGA - Gary P. 1-9", "Buche": 9, "Par": 36.0, "CR": 35.0, "SR": 128.0},
+    {"Nome": "ARZAGA - Gary Player", "Buche": 18, "Par": 72.0, "CR": 70.0, "SR": 128.0},
+    {"Nome": "ARZAGA - GP1+JN1", "Buche": 18, "Par": 72.0, "CR": 70.9, "SR": 125.0},
+    {"Nome": "ARZAGA - GP1+JN2", "Buche": 18, "Par": 72.0, "CR": 70.8, "SR": 129.0},
+    {"Nome": "ARZAGA - Jack N. 10-18", "Buche": 9, "Par": 36.0, "CR": 35.8, "SR": 129.0},
+    {"Nome": "ARZAGA - Jack N. 1-9", "Buche": 9, "Par": 36.0, "CR": 35.9, "SR": 124.0},
+    {"Nome": "ARZAGA - Jack Nicklaus", "Buche": 18, "Par": 72.0, "CR": 71.7, "SR": 126.0},
+    {"Nome": "ASIAGO - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.2, "SR": 124.0},
+    {"Nome": "ASIAGO - 18 Buche 2025", "Buche": 18, "Par": 71.0, "CR": 70.2, "SR": 124.0},
+    {"Nome": "ASIAGO - 18 Buche Provvisorio 2025", "Buche": 18, "Par": 69.0, "CR": 68.5, "SR": 120.0},
+    {"Nome": "ASIAGO - Percorso Invernale Misto", "Buche": 9, "Par": 35.0, "CR": 35.3, "SR": 124.0},
+    {"Nome": "ASIAGO - Percorso Invernale Misto 2 Volte", "Buche": 18, "Par": 70.0, "CR": 70.6, "SR": 124.0},
+    {"Nome": "ASIAGO - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.3, "SR": 121.0},
+    {"Nome": "ASIAGO - Prime Nove 2 Volte", "Buche": 18, "Par": 72.0, "CR": 70.6, "SR": 121.0},
+    {"Nome": "ASIAGO - Prime Nove 2025", "Buche": 9, "Par": 36.0, "CR": 35.0, "SR": 122.0},
+    {"Nome": "ASIAGO - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 34.9, "SR": 126.0},
+    {"Nome": "ASIAGO - Seconde Nove 2025", "Buche": 9, "Par": 35.0, "CR": 35.2, "SR": 126.0},
+    {"Nome": "ASIAGO - Seconde Nove Provvisorio 2025", "Buche": 9, "Par": 33.0, "CR": 33.2, "SR": 118.0},
+    {"Nome": "ASOLO - Giallo-Giallo", "Buche": 18, "Par": 72.0, "CR": 71.6, "SR": 132.0},
+    {"Nome": "ASOLO - Giallo-Verde", "Buche": 18, "Par": 72.0, "CR": 71.6, "SR": 131.0},
+    {"Nome": "ASOLO - Giallo-Verde Provvisorio 2024", "Buche": 18, "Par": 70.0, "CR": 70.0, "SR": 127.0},
+    {"Nome": "ASOLO - Percorso Giallo 9 buche", "Buche": 9, "Par": 36.0, "CR": 35.8, "SR": 132.0},
+    {"Nome": "ASOLO - Percorso Rosso 9 buche", "Buche": 9, "Par": 36.0, "CR": 35.8, "SR": 137.0},
+    {"Nome": "ASOLO - Percorso Verde 9 buche", "Buche": 9, "Par": 36.0, "CR": 35.7, "SR": 133.0},
+    {"Nome": "ASOLO - Rosso-Giallo", "Buche": 18, "Par": 72.0, "CR": 71.7, "SR": 134.0},
+    {"Nome": "ASOLO - Rosso-Giallo Provvisorio 2025", "Buche": 18, "Par": 71.0, "CR": 70.6, "SR": 131.0},
+    {"Nome": "ASOLO - Rosso-Verde", "Buche": 18, "Par": 72.0, "CR": 71.6, "SR": 135.0},
+    {"Nome": "ASOLO - Rosso-Verde Provvisorio 2025", "Buche": 18, "Par": 71.0, "CR": 70.5, "SR": 132.0},
+    {"Nome": "ASOLO - Trofeo Rocca d'Asolo 2024", "Buche": 18, "Par": 70.0, "CR": 70.1, "SR": 130.0},
+    {"Nome": "BAGNAIA - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 71.2, "SR": 141.0},
+    {"Nome": "BAGNAIA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.8, "SR": 147.0},
+    {"Nome": "BAGNAIA - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 35.4, "SR": 135.0},
+    {"Nome": "BARIALTO GOLF - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 69.8, "SR": 125.0},
+    {"Nome": "BARIALTO GOLF - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.0, "SR": 128.0},
+    {"Nome": "BARIALTO GOLF - Seconde Nove", "Buche": 9, "Par": 34.0, "CR": 34.8, "SR": 122.0},
+    {"Nome": "BARLASSINA - Campionato", "Buche": 18, "Par": 72.0, "CR": 71.0, "SR": 132.0},
+    {"Nome": "BARLASSINA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.3, "SR": 130.0},
+    {"Nome": "BARLASSINA - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 35.7, "SR": 133.0},
+    {"Nome": "BELLOSGUARDO - Monnalisa New 2023", "Buche": 18, "Par": 71.0, "CR": 71.9, "SR": 124.0},
+    {"Nome": "BELLOSGUARDO - Monnalisa New Prime Nove 2023", "Buche": 9, "Par": 35.0, "CR": 35.9, "SR": 127.0},
+    {"Nome": "BELLOSGUARDO - Monnalisa New Seconde Nove 2023", "Buche": 9, "Par": 36.0, "CR": 36.0, "SR": 121.0},
+    {"Nome": "BERGAMO ALBENZA - Blu", "Buche": 9, "Par": 36.0, "CR": 35.8, "SR": 137.0},
+    {"Nome": "BERGAMO ALBENZA - Blu-Giallo", "Buche": 18, "Par": 72.0, "CR": 71.8, "SR": 136.0},
+    {"Nome": "BERGAMO ALBENZA - Giallo", "Buche": 9, "Par": 36.0, "CR": 36.0, "SR": 135.0},
+    {"Nome": "BERGAMO ALBENZA - Rosso", "Buche": 9, "Par": 36.0, "CR": 35.8, "SR": 136.0},
+    {"Nome": "BERGAMO ALBENZA - Rosso-Blu", "Buche": 18, "Par": 72.0, "CR": 70.9, "SR": 134.0},
+    {"Nome": "BERGAMO ALBENZA - Rosso-Giallo", "Buche": 18, "Par": 72.0, "CR": 71.1, "SR": 133.0},
+    {"Nome": "BIELLA BETULLE - 18 buche 2018", "Buche": 18, "Par": 73.0, "CR": 72.9, "SR": 142.0},
+    {"Nome": "BIELLA BETULLE - Le Betulle", "Buche": 18, "Par": 73.0, "CR": 72.8, "SR": 140.0},
+    {"Nome": "BIELLA BETULLE - prime 9", "Buche": 9, "Par": 36.0, "CR": 36.4, "SR": 138.0},
+    {"Nome": "BOGLIACO - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 68.0, "SR": 137.0},
+    {"Nome": "BOGLIACO - Prime Nove", "Buche": 9, "Par": 35.0, "CR": 33.5, "SR": 138.0},
+    {"Nome": "BOGLIACO - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 34.5, "SR": 135.0},
+    {"Nome": "BOGOGNO - 1° Nove - Conte", "Buche": 9, "Par": 36.0, "CR": 36.8, "SR": 137.0},
+    {"Nome": "BOGOGNO - 2° Nove-Conte", "Buche": 9, "Par": 36.0, "CR": 36.3, "SR": 125.0},
+    {"Nome": "BOGOGNO - Bonora", "Buche": 18, "Par": 72.0, "CR": 72.7, "SR": 138.0},
+    {"Nome": "BOGOGNO - del Conte", "Buche": 18, "Par": 72.0, "CR": 73.1, "SR": 131.0},
+    {"Nome": "BOGOGNO - Prime Nove - Bonora", "Buche": 9, "Par": 36.0, "CR": 35.9, "SR": 132.0},
+    {"Nome": "BOGOGNO - Seconde Nove-Bonora", "Buche": 9, "Par": 36.0, "CR": 36.6, "SR": 140.0},
+    {"Nome": "BOLLINA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 69.7, "SR": 125.0},
+    {"Nome": "BOLLINA - 9 Buche", "Buche": 9, "Par": 36.0, "CR": 34.9, "SR": 125.0},
+    {"Nome": "BOLOGNA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 71.7, "SR": 127.0},
+    {"Nome": "BOLOGNA - PAR 71 CAMPIONATO", "Buche": 18, "Par": 71.0, "CR": 71.3, "SR": 125.0},
+    {"Nome": "BOLOGNA - par 71.", "Buche": 18, "Par": 71.0, "CR": 70.9, "SR": 126.0},
+    {"Nome": "BOLOGNA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.7, "SR": 135.0},
+    {"Nome": "BOLOGNA - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 36.1, "SR": 118.0},
+    {"Nome": "BOLOGNA - seconde nove par 35", "Buche": 9, "Par": 35.0, "CR": 35.2, "SR": 117.0},
+    {"Nome": "BORGO CAMUZZAGO - Nove Buche par 27", "Buche": 9, "Par": 27.0, "CR": 28.9, "SR": 97.0},
+    {"Nome": "BORGO CAMUZZAGO - 18 buche", "Buche": 18, "Par": 64.0, "CR": 62.1, "SR": 109.0},
+    {"Nome": "BORGO CAMUZZAGO - 18 Buche par54", "Buche": 18, "Par": 54.0, "CR": 57.8, "SR": 97.0},
+    {"Nome": "BORGO CAMUZZAGO - 9 buche", "Buche": 9, "Par": 32.0, "CR": 31.1, "SR": 109.0},
+    {"Nome": "BORMIO SSD - 18 Buche", "Buche": 18, "Par": 66.0, "CR": 60.8, "SR": 107.0},
+    {"Nome": "BORMIO SSD - 18 buche Par 62", "Buche": 18, "Par": 62.0, "CR": 58.8, "SR": 107.0},
+    {"Nome": "BORMIO SSD - 9 Buche", "Buche": 9, "Par": 33.0, "CR": 30.4, "SR": 107.0},
+    {"Nome": "BORMIO SSD - 9 buche Par 31", "Buche": 9, "Par": 31.0, "CR": 29.4, "SR": 107.0},
+    {"Nome": "BOTANIC SA CUBA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 64.8, "SR": 116.0},
+    {"Nome": "BOTANIC SA CUBA - 9 Buche", "Buche": 9, "Par": 36.0, "CR": 32.4, "SR": 116.0},
+    {"Nome": "BOVES - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 69.2, "SR": 125.0},
+    {"Nome": "BOVES - 18 Buche Provvisorio 2024", "Buche": 18, "Par": 72.0, "CR": 69.3, "SR": 125.0},
+    {"Nome": "BOVES - 9 BUCHE MISTO 2 VOLTE", "Buche": 9, "Par": 72.0, "CR": 70.6, "SR": 123.0},
+    {"Nome": "BOVES - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 34.8, "SR": 116.0},
+    {"Nome": "BOVES - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 34.5, "SR": 134.0},
+    {"Nome": "BRIANZA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 69.0, "SR": 129.0},
+    {"Nome": "BRIANZA - Prime Nove", "Buche": 9, "Par": 35.0, "CR": 33.5, "SR": 129.0},
+    {"Nome": "BRIANZA - Seconde Nove", "Buche": 9, "Par": 37.0, "CR": 35.4, "SR": 129.0},
+    {"Nome": "CA' AMATA - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 72.2, "SR": 136.0},
+    {"Nome": "CA' AMATA - 18 Buche Provvisorio 2025", "Buche": 18, "Par": 71.0, "CR": 71.7, "SR": 135.0},
+    {"Nome": "CA' AMATA - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.4, "SR": 135.0},
+    {"Nome": "CA' AMATA - Prime Nove Provvisorio 2025", "Buche": 9, "Par": 36.0, "CR": 34.9, "SR": 134.0},
+    {"Nome": "CA' AMATA - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 36.0, "SR": 133.0},
+    {"Nome": "CA' NAVE SSD - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.0, "SR": 128.0},
+    {"Nome": "CA' NAVE SSD - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 34.8, "SR": 122.0},
+    {"Nome": "CA' NAVE SSD - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 34.2, "SR": 120.0},
+    {"Nome": "CA' ULIVI - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 70.0, "SR": 122.0},
+    {"Nome": "CA' ULIVI - Mirabello", "Buche": 18, "Par": 62.0, "CR": 60.3, "SR": 108.0},
+    {"Nome": "CA' ULIVI - Mirabello 9 B.", "Buche": 9, "Par": 31.0, "CR": 30.1, "SR": 108.0},
+    {"Nome": "CAMPODOGLIO - 18 Buche Easy 2024", "Buche": 18, "Par": 70.0, "CR": 68.2, "SR": 114.0},
+    {"Nome": "CAMPODOGLIO - 18 Buche Mixed 2024", "Buche": 18, "Par": 71.0, "CR": 70.7, "SR": 120.0},
+    {"Nome": "CAMPODOGLIO - 18 Buche New 2024", "Buche": 18, "Par": 70.0, "CR": 70.6, "SR": 121.0},
+    {"Nome": "CAMPODOGLIO - 18 Buche Old 2024", "Buche": 18, "Par": 72.0, "CR": 71.0, "SR": 121.0},
+    {"Nome": "CAMPODOGLIO - 9 Buche Easy 2024", "Buche": 9, "Par": 35.0, "CR": 34.1, "SR": 114.0},
+    {"Nome": "CAMPODOGLIO - 9 Buche Mixed 2024", "Buche": 9, "Par": 36.0, "CR": 35.6, "SR": 122.0},
+    {"Nome": "CAMPODOGLIO - 9 Buche New 2024", "Buche": 9, "Par": 35.0, "CR": 35.3, "SR": 121.0},
+    {"Nome": "CAMPODOGLIO - 9 Buche Old 2024", "Buche": 9, "Par": 36.0, "CR": 35.5, "SR": 121.0},
+    {"Nome": "CANSIGLIO - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.0, "SR": 129.0},
+    {"Nome": "CANSIGLIO - Prime Nove", "Buche": 9, "Par": 35.0, "CR": 32.6, "SR": 122.0},
+    {"Nome": "CANSIGLIO - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 33.9, "SR": 128.0},
+    {"Nome": "CAORLE - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 68.2, "SR": 122.0},
+    {"Nome": "CAORLE - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 33.9, "SR": 123.0},
+    {"Nome": "CAORLE - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 34.3, "SR": 121.0},
+    {"Nome": "CARIMATE - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 69.7, "SR": 128.0},
+    {"Nome": "CARIMATE - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 34.7, "SR": 128.0},
+    {"Nome": "CARIMATE - Seconde Nove", "Buche": 9, "Par": 35.0, "CR": 34.9, "SR": 128.0},
+    {"Nome": "CASALUNGA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 70.6, "SR": 125.0},
+    {"Nome": "CASALUNGA - 18 Buche Storm 2023 D", "Buche": 18, "Par": 72.0, "CR": 70.4, "SR": 126.0},
+    {"Nome": "CASALUNGA - 9 Buche", "Buche": 9, "Par": 36.0, "CR": 35.3, "SR": 125.0},
+    {"Nome": "CASALUNGA - 9 Buche Storm 2023 D", "Buche": 9, "Par": 36.0, "CR": 35.2, "SR": 126.0},
+    {"Nome": "CASENTINO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 67.5, "SR": 116.0},
+    {"Nome": "CASENTINO - 9 Buche", "Buche": 9, "Par": 36.0, "CR": 33.7, "SR": 116.0},
+    {"Nome": "CASTELCONTURBIA - 9 buche Azzurro", "Buche": 9, "Par": 36.0, "CR": 35.9, "SR": 138.0},
+    {"Nome": "CASTELCONTURBIA - 9 buche Giallo", "Buche": 9, "Par": 36.0, "CR": 35.6, "SR": 146.0},
+    {"Nome": "CASTELCONTURBIA - 9 buche Rosso", "Buche": 9, "Par": 36.0, "CR": 37.0, "SR": 141.0},
+    {"Nome": "CASTELCONTURBIA - Azzurro-Giallo", "Buche": 18, "Par": 72.0, "CR": 71.5, "SR": 142.0},
+    {"Nome": "CASTELCONTURBIA - Azzurro-Rosso", "Buche": 18, "Par": 72.0, "CR": 73.0, "SR": 139.0},
+    {"Nome": "CASTELCONTURBIA - Giallo-Rosso", "Buche": 18, "Par": 72.0, "CR": 72.6, "SR": 143.0},
+    {"Nome": "CASTELFALFI - LAKE + Mountain Prime Nove", "Buche": 18, "Par": 73.0, "CR": 70.8, "SR": 138.0},
+    {"Nome": "CASTELFALFI - LAKE 18 Buche", "Buche": 18, "Par": 74.0, "CR": 71.8, "SR": 144.0},
+    {"Nome": "CASTELFALFI - LAKE 9 Buche", "Buche": 9, "Par": 37.0, "CR": 35.9, "SR": 144.0},
+    {"Nome": "CASTELFALFI - Mountain 18 Buche", "Buche": 18, "Par": 72.0, "CR": 75.1, "SR": 150.0},
+    {"Nome": "CASTELGANDOLFO - 18 Buche - Buca 4 Par 3", "Buche": 18, "Par": 71.0, "CR": 70.0, "SR": 128.0},
+    {"Nome": "CASTELGANDOLFO - 18 Buche Provvisorio 2026", "Buche": 18, "Par": 71.0, "CR": 69.7, "SR": 130.0},
+    {"Nome": "CASTELGANDOLFO - Campionato", "Buche": 18, "Par": 72.0, "CR": 71.5, "SR": 134.0},
+    {"Nome": "CASTELGANDOLFO - Misto (10-11-12-13-14-6-7-8-9)", "Buche": 9, "Par": 36.0, "CR": 34.8, "SR": 131.0},
+    {"Nome": "CASTELGANDOLFO - Misto (10-11-12-13-14-6-7-8-9) 2 Volte", "Buche": 18, "Par": 72.0, "CR": 69.6, "SR": 131.0},
+    {"Nome": "CASTELGANDOLFO - Misto (10-17-12-13-14-6-7-8-9)", "Buche": 9, "Par": 34.0, "CR": 33.2, "SR": 123.0},
+    {"Nome": "CASTELGANDOLFO - Misto (10-17-12-13-14-6-7-8-9) 2 Volte", "Buche": 18, "Par": 68.0, "CR": 66.4, "SR": 123.0},
+    {"Nome": "CASTELGANDOLFO - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 35.6, "SR": 138.0},
+    {"Nome": "CASTELGANDOLFO - Prime Nove - Buca 4 Par 3", "Buche": 9, "Par": 35.0, "CR": 34.1, "SR": 127.0},
+    {"Nome": "CASTELGANDOLFO - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 35.9, "SR": 129.0},
+    {"Nome": "CASTELLARO - 18 Buche", "Buche": 18, "Par": 66.0, "CR": 63.6, "SR": 114.0},
+    {"Nome": "CASTELLARO - 9 Buche", "Buche": 9, "Par": 33.0, "CR": 31.8, "SR": 114.0},
+    {"Nome": "CASTELLO SPESSA - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 67.2, "SR": 126.0},
+    {"Nome": "CASTELLO SPESSA - 2 Volte 1°Nove", "Buche": 18, "Par": 70.0, "CR": 66.0, "SR": 127.0},
+    {"Nome": "CASTELLO SPESSA - Prime Nove", "Buche": 9, "Par": 35.0, "CR": 33.0, "SR": 127.0},
+    {"Nome": "CASTELLO SPESSA - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 34.2, "SR": 125.0},
+    {"Nome": "CAVAGLIA' - 18 buche", "Buche": 18, "Par": 68.0, "CR": 63.8, "SR": 123.0},
+    {"Nome": "CAVAGLIA' - 9 buche", "Buche": 9, "Par": 35.0, "CR": 32.6, "SR": 124.0},
+    {"Nome": "CAVAGLIA' - 9 buche 1-9", "Buche": 9, "Par": 34.0, "CR": 31.8, "SR": 121.0},
+    {"Nome": "CERRETO MIGLIANICO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 70.4, "SR": 126.0},
+    {"Nome": "CERRETO MIGLIANICO - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 33.3, "SR": 119.0},
+    {"Nome": "CERRETO MIGLIANICO - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 34.0, "SR": 119.0},
+    {"Nome": "CERVIA - 9 Buche Blu", "Buche": 9, "Par": 36.0, "CR": 35.3, "SR": 127.0},
+    {"Nome": "CERVIA - 9 buche Giallo", "Buche": 9, "Par": 35.0, "CR": 35.4, "SR": 126.0},
+    {"Nome": "CERVIA - 9 Buche Rosso", "Buche": 9, "Par": 36.0, "CR": 36.5, "SR": 125.0},
+    {"Nome": "CERVIA - Blu-Giallo", "Buche": 18, "Par": 71.0, "CR": 70.7, "SR": 127.0},
+    {"Nome": "CERVIA - Giallo-Rosso", "Buche": 18, "Par": 71.0, "CR": 71.9, "SR": 126.0},
+    {"Nome": "CERVIA - Percorso Open", "Buche": 18, "Par": 71.0, "CR": 71.9, "SR": 126.0},
+    {"Nome": "CERVIA - Rosso-Blu", "Buche": 18, "Par": 72.0, "CR": 71.8, "SR": 126.0},
+    {"Nome": "CERVINO - 18 Buche", "Buche": 18, "Par": 69.0, "CR": 68.0, "SR": 128.0},
+    {"Nome": "CERVINO - 18 Buche Provvisorio 2026", "Buche": 18, "Par": 68.0, "CR": 64.6, "SR": 118.0},
+    {"Nome": "CERVINO - 9 Buche Misto", "Buche": 9, "Par": 36.0, "CR": 34.5, "SR": 128.0},
+    {"Nome": "CERVINO - 9 Buche Provvisorio 2026", "Buche": 9, "Par": 34.0, "CR": 32.3, "SR": 118.0},
+    {"Nome": "CHERASCO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 70.8, "SR": 131.0},
+    {"Nome": "CHERASCO - Prime Nove", "Buche": 9, "Par": 36.0, "CR": 36.1, "SR": 130.0},
+    {"Nome": "CHERASCO - Prime Nove 2 volte", "Buche": 18, "Par": 72.0, "CR": 72.2, "SR": 130.0},
+    {"Nome": "CHERASCO - Seconde Nove", "Buche": 9, "Par": 36.0, "CR": 34.7, "SR": 131.0},
+    {"Nome": "CHERASCO - Seconde Nove 2 volte", "Buche": 18, "Par": 72.0, "CR": 69.4, "SR": 131.0},
+    {"Nome": "CILIEGI - 9 BUCHE", "Buche": 9, "Par": 36.0, "CR": 35.2, "SR": 129.0},
+    {"Nome": "CILIEGI - CHERRIES B+V", "Buche": 18, "Par": 72.0, "CR": 68.4, "SR": 124.0},
+    {"Nome": "CILIEGI - KING", "Buche": 18, "Par": 72.0, "CR": 70.4, "SR": 129.0},
+    {"Nome": "CITTA' D'ASTI - 18 Buche", "Buche": 18, "Par": 66.0, "CR": 62.5, "SR": 105.0},
+    {"Nome": "CITTA' D'ASTI - 9 BUCHE", "Buche": 9, "Par": 33.0, "CR": 31.3, "SR": 105.0},
+    {"Nome": "CLAVIERE - Buche 18", "Buche": 18, "Par": 64.0, "CR": 66.0, "SR": 121.0},
+    {"Nome": "CLAVIERE - 9 Buche", "Buche": 9, "Par": 32.0, "CR": 31.8, "SR": 115.0},
+    {"Nome": "COLLI BERECI - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 69.7, "SR": 131.0},
+    {"Nome": "CONERO - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.2, "SR": 129.0},
+    {"Nome": "CORTINA SSD - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 68.2, "SR": 124.0},
+    {"Nome": "COSMOPOLITAN - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.0, "SR": 133.0},
+    {"Nome": "CROARA SSD - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 68.7, "SR": 125.0},
+    {"Nome": "CUS FERRARA - 18 Buche", "Buche": 18, "Par": 68.0, "CR": 65.2, "SR": 110.0},
+    {"Nome": "DES ILES BORROMEES - 18 Buche 2023", "Buche": 18, "Par": 72.0, "CR": 70.7, "SR": 132.0},
+    {"Nome": "DOLOMITI - 18 Buche", "Buche": 18, "Par": 73.0, "CR": 71.6, "SR": 127.0},
+    {"Nome": "DUCATO - La Rocca 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.5, "SR": 133.0},
+    {"Nome": "FIORANELLO - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 69.0, "SR": 127.0},
+    {"Nome": "FIRENZE UGOLINO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 67.5, "SR": 125.0},
+    {"Nome": "FOLGARIA - 2026-18 Buche par 72", "Buche": 18, "Par": 72.0, "CR": 65.7, "SR": 120.0},
+    {"Nome": "FONTI - 18 Buche Par 72- 2023", "Buche": 18, "Par": 72.0, "CR": 71.4, "SR": 125.0},
+    {"Nome": "FRANCIACORTA - BRUT+SATEN", "Buche": 18, "Par": 72.0, "CR": 71.4, "SR": 132.0},
+    {"Nome": "FRASSANELLE - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 71.5, "SR": 131.0},
+    {"Nome": "FRONDE - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.8, "SR": 132.0},
+    {"Nome": "GARDAGOLF - Bianco-Giallo", "Buche": 18, "Par": 71.0, "CR": 71.0, "SR": 131.0},
+    {"Nome": "GARLENDA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.2, "SR": 137.0},
+    {"Nome": "GLOBALE JESOLO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 70.7, "SR": 119.0},
+    {"Nome": "GREEN CLUB LAINATE - 18 Buche 2023", "Buche": 18, "Par": 70.0, "CR": 68.3, "SR": 123.0},
+    {"Nome": "IS ARENAS - 18 Buche 2022", "Buche": 18, "Par": 72.0, "CR": 73.6, "SR": 140.0},
+    {"Nome": "IS MOLAS SSD - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 73.6, "SR": 132.0},
+    {"Nome": "LIGNANO SSD - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.3, "SR": 135.0},
+    {"Nome": "MARCO SIMONE - 2021 18 buche", "Buche": 18, "Par": 72.0, "CR": 72.1, "SR": 129.0},
+    {"Nome": "MARGARA - La Guazzetta", "Buche": 18, "Par": 72.0, "CR": 73.0, "SR": 130.0},
+    {"Nome": "MARGARA - Lolli Ghetti", "Buche": 18, "Par": 72.0, "CR": 72.5, "SR": 130.0},
+    {"Nome": "MENAGGIO - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 69.3, "SR": 133.0},
+    {"Nome": "MILANO - 1/2", "Buche": 18, "Par": 72.0, "CR": 73.4, "SR": 129.0},
+    {"Nome": "MODENA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.2, "SR": 127.0},
+    {"Nome": "MOLINETTO - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 71.4, "SR": 130.0},
+    {"Nome": "MONTEVEGLIO ASD - Nove Buche", "Buche": 9, "Par": 32.0, "CR": 31.7, "SR": 114.0},
+    {"Nome": "MONTEVEGLIO ASD - 18 Buche", "Buche": 18, "Par": 64.0, "CR": 63.4, "SR": 114.0},
+    {"Nome": "MONTICELLO - Blu", "Buche": 18, "Par": 72.0, "CR": 71.4, "SR": 132.0},
+    {"Nome": "MONTICELLO - Rosso", "Buche": 18, "Par": 72.0, "CR": 72.1, "SR": 133.0},
+    {"Nome": "NAZIONALE - Campionato", "Buche": 18, "Par": 72.0, "CR": 71.7, "SR": 142.0},
+    {"Nome": "OLGIATA - Percorso Ovest Par 72", "Buche": 18, "Par": 72.0, "CR": 73.2, "SR": 134.0},
+    {"Nome": "PADOVA - Padova 2025-Percorso Rosso-Blu", "Buche": 18, "Par": 72.0, "CR": 71.4, "SR": 124.0},
+    {"Nome": "PARCO DE' MEDICI - Championship Bianco/Blu", "Buche": 18, "Par": 72.0, "CR": 71.1, "SR": 136.0},
+    {"Nome": "PAVONIERE - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 73.0, "SR": 139.0},
+    {"Nome": "PEVERO - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 73.5, "SR": 140.0},
+    {"Nome": "PINETINA - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 70.5, "SR": 126.0},
+    {"Nome": "PUNTA ALA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 73.3, "SR": 139.0},
+    {"Nome": "RAPALLO - B.2 Par 5-B.5 Rid. Par 70", "Buche": 18, "Par": 70.0, "CR": 69.6, "SR": 121.0},
+    {"Nome": "RIVIERA GOLF - 18 Buche", "Buche": 18, "Par": 70.0, "CR": 70.1, "SR": 122.0},
+    {"Nome": "ROBINIE - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 71.7, "SR": 125.0},
+    {"Nome": "ROMA ACQUASANTA - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.7, "SR": 131.0},
+    {"Nome": "ROYAL PARK ROVERI - Hurdzan Fry", "Buche": 18, "Par": 72.0, "CR": 74.6, "SR": 140.0},
+    {"Nome": "ROYAL PARK ROVERI - Trent Jones", "Buche": 18, "Par": 72.0, "CR": 74.7, "SR": 143.0},
+    {"Nome": "SAN DOMENICO - EGNAZIA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 71.3, "SR": 128.0},
+    {"Nome": "SAN VIGILIO - Benaco-Solferino", "Buche": 18, "Par": 72.0, "CR": 71.7, "SR": 124.0},
+    {"Nome": "SANREMO ULIVI - 18 Buche", "Buche": 18, "Par": 69.0, "CR": 68.7, "SR": 119.0},
+    {"Nome": "TERRE CONSOLI - 18 buche 2019", "Buche": 18, "Par": 72.0, "CR": 74.8, "SR": 133.0},
+    {"Nome": "TOLCINASCO - Blu-Giallo", "Buche": 18, "Par": 72.0, "CR": 71.1, "SR": 133.0},
+    {"Nome": "TORINO - Blu", "Buche": 18, "Par": 72.0, "CR": 73.7, "SR": 142.0},
+    {"Nome": "TOSCANA - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.5, "SR": 129.0},
+    {"Nome": "UDINE - 18 buche 2018", "Buche": 18, "Par": 72.0, "CR": 74.4, "SR": 139.0},
+    {"Nome": "VALTELLINA - 18 Buche", "Buche": 18, "Par": 71.0, "CR": 70.3, "SR": 133.0},
+    {"Nome": "VARESE - Vecchio Monastero", "Buche": 18, "Par": 72.0, "CR": 71.2, "SR": 130.0},
+    {"Nome": "VENEZIA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.6, "SR": 138.0},
+    {"Nome": "VERDURA - East", "Buche": 18, "Par": 73.0, "CR": 74.3, "SR": 136.0},
+    {"Nome": "VERONA - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 72.0, "SR": 139.0},
+    {"Nome": "VILLA CAROLINA SSD - La Marchesa", "Buche": 18, "Par": 72.0, "CR": 72.9, "SR": 130.0},
+    {"Nome": "VILLA CONDULMER - 2026-18 buche Giallo/Blu", "Buche": 18, "Par": 71.0, "CR": 70.6, "SR": 130.0},
+    {"Nome": "VILLA D'ESTE - 18 Buche", "Buche": 18, "Par": 69.0, "CR": 70.0, "SR": 129.0},
+    {"Nome": "VILLA PARADISO SSD - 18 Buche 2024", "Buche": 18, "Par": 72.0, "CR": 72.8, "SR": 131.0},
+    {"Nome": "ZOATE - 18 Buche", "Buche": 18, "Par": 72.0, "CR": 70.5, "SR": 144.0}
+]
+
+
+# --- CARICAMENTO E SALVATAGGIO DATI EXCEL ---
 @st.cache_data(ttl=1)
 def load_data():
-  filename = None
-  for fname in ["Handicap_2026.xlsx", "Handicap 2026.xlsx"]:
-    if os.path.exists(fname):
-      filename = fname
-      break
+  if os.path.exists(NOME_FILE_EXCEL):
+    df = pd.read_excel(NOME_FILE_EXCEL, sheet_name="Foglio2")
+    if "Data" in df.columns and "SD" in df.columns:
+      df["Data"] = pd.to_datetime(df["Data"])
+      return df
 
-  if not filename:
-    return pd.DataFrame()
+  # Fallback se il file ha lo spazio nel nome
+  if os.path.exists("Handicap 2026.xlsx"):
+    df = pd.read_excel("Handicap 2026.xlsx", sheet_name="Foglio2")
+    if "Data" in df.columns and "SD" in df.columns:
+      df["Data"] = pd.to_datetime(df["Data"])
+      return df
 
-  # Prova prima con la riga 1 come intestazione (header=0)
-  df = pd.read_excel(filename, sheet_name="Foglio2")
-  if "Data" in df.columns and "SD" in df.columns:
-    df["Data"] = pd.to_datetime(df["Data"])
-    return df
-
-  # Se non trova le colonne, prova con la riga 2 (header=1)
-  df_h1 = pd.read_excel(filename, sheet_name="Foglio2", header=1)
-  if "Data" in df_h1.columns and "SD" in df_h1.columns:
-    df_h1["Data"] = pd.to_datetime(df_h1["Data"])
-    return df_h1
-
-  return df
+  return pd.DataFrame()
 
 
 def save_data(df_to_save):
-  filename = "Handicap_2026.xlsx"
-  if os.path.exists("Handicap 2026.xlsx") and not os.path.exists(
-      "Handicap_2026.xlsx"
-  ):
-    filename = "Handicap 2026.xlsx"
-
   df_clean = df_to_save.copy()
   if "Data" in df_clean.columns:
     df_clean["Data"] = pd.to_datetime(df_clean["Data"]).dt.strftime("%Y-%m-%d")
 
-  df_clean.to_excel(filename, sheet_name="Foglio2", index=False)
+  df_clean.to_excel(NOME_FILE_EXCEL, sheet_name="Foglio2", index=False)
   st.cache_data.clear()
 
 
-# --- CARICAMENTO E SALVATAGGIO ANAGRAFICA CAMPI ---
+# --- ANAGRAFICA CAMPI DI GIOCO ---
 def load_campi():
-  json_path = "campi.json"
-  if os.path.exists(json_path):
+  if os.path.exists(NOME_FILE_CAMPI):
     try:
-      with open(json_path, "r", encoding="utf-8") as f:
+      with open(NOME_FILE_CAMPI, "r", encoding="utf-8") as f:
         return json.load(f)
     except Exception:
       pass
 
-  campi = []
-  df_ex = load_data()
-  if not df_ex.empty and "Esecutore" in df_ex.columns:
-    subset = (
-        df_ex[["Esecutore", "Buche", "Par", "CR", "SR"]]
-        .dropna(subset=["Esecutore"])
-        .drop_duplicates()
-    )
-    for _, row in subset.iterrows():
-      campi.append({
-          "Nome": str(row["Esecutore"]),
-          "Buche": int(row["Buche"]),
-          "Par": float(row["Par"]),
-          "CR": float(row["CR"]),
-          "SR": float(row["SR"]),
-      })
-
-  if not campi:
-    campi = [
-        {
-            "Nome": "MONTEVEGLIO ASD",
-            "Buche": 9,
-            "Par": 32.0,
-            "CR": 31.7,
-            "SR": 114.0,
-        },
-        {
-            "Nome": "MONTEVEGLIO ASD",
-            "Buche": 18,
-            "Par": 64.0,
-            "CR": 63.4,
-            "SR": 114.0,
-        },
-        {"Nome": "MONTICELLO", "Buche": 18, "Par": 72.0, "CR": 72.1, "SR": 133.0},
-    ]
-  save_campi(campi)
-  return campi
+  # Se non esiste un file campi.json, salva ed usa l'elenco integrato Federgolf
+  save_campi(CAMPI_FEDERGOLF_DEFAULT)
+  return CAMPI_FEDERGOLF_DEFAULT
 
 
 def save_campi(campi_list):
-  with open("campi.json", "w", encoding="utf-8") as f:
+  with open(NOME_FILE_CAMPI, "w", encoding="utf-8") as f:
     json.dump(campi_list, f, indent=4, ensure_ascii=False)
 
 
@@ -183,7 +428,7 @@ if not df.empty and "SD" in df.columns:
       miglior_hcp = df_trend["HCP_Storico"].min()
       st.metric("Miglior Handicap Storico", value=miglior_hcp)
 
-  # --- TABS NAVIGAZIONE ---
+  # --- SCHEDE NAVIGAZIONE ---
   tab_dash, tab_sim, tab_campi, tab_reg = st.tabs([
       "📊 Dashboard & Trend HCP",
       "🔮 Simulazione Gara",
@@ -226,8 +471,7 @@ if not df.empty and "SD" in df.columns:
 
     st.subheader("🟢 Ultimi 20 Risultati (Evidenziati i Migliori 8)")
 
-    # Colonne dalla B alla H dell'Excel (Data, Gara, Esecutore, Buche, Playing HCP, Stbl, SD)
-    cols_target = [
+    cols_b_h = [
         "Data",
         "Gara",
         "Esecutore",
@@ -236,7 +480,7 @@ if not df.empty and "SD" in df.columns:
         "Stbl",
         "SD",
     ]
-    cols_display = [c for c in cols_target if c in ultimi_20.columns]
+    cols_display = [c for c in cols_b_h if c in ultimi_20.columns]
 
     ultimi_20_show = ultimi_20.copy()
     if "Data" in ultimi_20_show.columns:
@@ -389,8 +633,8 @@ if not df.empty and "SD" in df.columns:
   with tab_campi:
     st.subheader("⛳ Gestione Anagrafica Campi di Gioco")
     st.write(
-        "Aggiungi o modifica i campi da gioco con i relativi valori di Par, CR"
-        " e SR per 9 e 18 buche."
+        "Visualizza, modifica o aggiungi campi da gioco con i relativi valori"
+        " di Par, CR e SR."
     )
 
     df_campi_curr = pd.DataFrame(lista_campi)
@@ -449,8 +693,8 @@ if not df.empty and "SD" in df.columns:
   with tab_reg:
     st.subheader("📋 Registro Gare Ufficiale (Modifica Dati)")
     st.write(
-        "Modifica direttamente le celle della tabella per correggere eventuali"
-        " dati e clicca sul pulsante sottostante per salvare le modifiche nell'Excel."
+        "Modifica direttamente le celle per correggere eventuali dati e salva"
+        " nell'Excel."
     )
 
     df_editable = df.copy()
@@ -531,6 +775,6 @@ if not df.empty and "SD" in df.columns:
 
 else:
   st.error(
-      "File Excel non trovato o privo della struttura corretta. Assicurati che"
-      " 'Handicap_2026.xlsx' sia caricato correttamente."
+      "File Excel non trovato. Assicurati che 'Handicap_2026.xlsx' sia presente"
+      " su GitHub."
   )
