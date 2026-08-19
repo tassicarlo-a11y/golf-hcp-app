@@ -2,8 +2,6 @@
 import os
 import pandas as pd
 import plotly.express as px
-from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextContainer
 import streamlit as st
 
 st.set_page_config(
@@ -12,160 +10,6 @@ st.set_page_config(
 
 NOME_FILE_EXCEL = "Handicap_2026.xlsx"
 NOME_FILE_CAMPI = "campi.json"
-
-
-# --- FUNZIONE DI PARSING AUTOMATICO DEL PDF FEDERGOLF ---
-def genera_json_da_pdf(pdf_path):
-  HEADER_WORDS = {
-      "TEE UOMINI",
-      "TEE DONNE",
-      "NERO",
-      "BIANCO",
-      "GIALLO",
-      "VERDE",
-      "BLU",
-      "ROSSO",
-      "ARANCIO",
-      "Circolo",
-      "Percorso",
-      "PAR",
-      "CR",
-      "Slope",
-      "Ci sono 911 percorsi.",
-  }
-  pages = list(extract_pages(pdf_path))
-  dataset = []
-  last_circolo = ""
-
-  for page in pages:
-    items = []
-    for element in page:
-      if isinstance(element, LTTextContainer):
-        t = element.get_text().strip()
-        if t and t not in HEADER_WORDS:
-          items.append({
-              "x0": element.bbox[0],
-              "y0": element.bbox[1],
-              "x1": element.bbox[2],
-              "y1": element.bbox[3],
-              "text": t,
-          })
-
-    data_items = [
-        it
-        for it in items
-        if it["y1"] < 765 and "TEE UOMINI" not in it["text"]
-    ]
-    data_items.sort(key=lambda item: -item["y1"])
-
-    rows = []
-    for item in data_items:
-      found = False
-      for row in rows:
-        if abs(row["y"] - item["y1"]) < 5:
-          row["items"].append(item)
-          found = True
-          break
-      if not found:
-        rows.append({"y": item["y1"], "items": [item]})
-
-    for row in rows:
-      row["items"].sort(key=lambda item: item["x0"])
-      circolo_parts, percorso_parts = [], []
-      par_val = None
-      tees_val = {}
-
-      for it in row["items"]:
-        x = it["x0"]
-        t = it["text"].replace("\n", " ").strip()
-
-        if x < 105 and not t.replace(".", "").isdigit():
-          circolo_parts.append(t)
-        elif 105 <= x < 175 and not t.replace(".", "").isdigit():
-          percorso_parts.append(t)
-        elif 175 <= x < 200 and t.isdigit():
-          try:
-            par_val = float(t)
-          except Exception:
-            pass
-        else:
-          try:
-            val = float(t)
-            if 200 <= x < 225:
-              tees_val.setdefault("Nero", {})["CR"] = val
-            elif 225 <= x < 255:
-              tees_val.setdefault("Nero", {})["SR"] = val
-            elif 255 <= x < 280:
-              tees_val.setdefault("Bianco", {})["CR"] = val
-            elif 280 <= x < 310:
-              tees_val.setdefault("Bianco", {})["SR"] = val
-            elif 310 <= x < 338:
-              tees_val.setdefault("Giallo", {})["CR"] = val
-            elif 338 <= x < 365:
-              tees_val.setdefault("Giallo", {})["SR"] = val
-            elif 365 <= x < 392:
-              tees_val.setdefault("Verde", {})["CR"] = val
-            elif 392 <= x < 420:
-              tees_val.setdefault("Verde", {})["SR"] = val
-            elif 420 <= x < 448:
-              tees_val.setdefault("Blu", {})["CR"] = val
-            elif 448 <= x < 475:
-              tees_val.setdefault("Blu", {})["SR"] = val
-            elif 475 <= x < 502:
-              tees_val.setdefault("Rosso", {})["CR"] = val
-            elif 502 <= x < 530:
-              tees_val.setdefault("Rosso", {})["SR"] = val
-            elif 530 <= x < 555:
-              tees_val.setdefault("Arancio", {})["CR"] = val
-            elif 555 <= x < 585:
-              tees_val.setdefault("Arancio", {})["SR"] = val
-          except Exception:
-            pass
-
-      c_name = " ".join(circolo_parts).strip()
-      p_name = " ".join(percorso_parts).strip()
-      if c_name:
-        last_circolo = c_name
-      else:
-        c_name = last_circolo
-
-      if c_name and par_val and tees_val:
-        buche = (
-            9
-            if (
-                "9" in p_name.lower()
-                or "nove" in p_name.lower()
-                or par_val < 50
-            )
-            else 18
-        )
-        valid_tees = {
-            k: v for k, v in tees_val.items() if "CR" in v and "SR" in v
-        }
-        if valid_tees:
-          dataset.append({
-              "Circolo": c_name,
-              "Percorso": p_name if p_name else "Percorso Standard",
-              "Buche": buche,
-              "Par": par_val,
-              "Tees": valid_tees,
-          })
-
-  seen = set()
-  dataset_unique = []
-  for d in dataset:
-    key = (
-        d["Circolo"],
-        d["Percorso"],
-        d["Buche"],
-        d["Par"],
-        json.dumps(d["Tees"], sort_keys=True),
-    )
-    if key not in seen:
-      seen.add(key)
-      dataset_unique.append(d)
-
-  return dataset_unique
 
 
 # --- CARICAMENTO E SALVATAGGIO DATI EXCEL ---
@@ -211,23 +55,6 @@ def load_campi():
     except Exception:
       pass
 
-  # Estrazione dal PDF se presente
-  pdf_file = None
-  for f in os.listdir("."):
-    if f.endswith(".pdf"):
-      pdf_file = f
-      break
-
-  if pdf_file:
-    try:
-      campi_pdf = genera_json_da_pdf(pdf_file)
-      if campi_pdf:
-        save_campi(campi_pdf)
-        return campi_pdf
-    except Exception:
-      pass
-
-  # Fallback di sicurezza
   default_db = [{
       "Circolo": "MONTEVEGLIO ASD",
       "Percorso": "18 Buche",
@@ -263,6 +90,18 @@ def calcola_sd_da_stableford(
   ags = par_eff + hcp_eff + 36 - stbl_eff
   sd = (113 / sr) * (ags - cr_eff - pcc)
   return round(sd, 1)
+
+
+# --- CALCOLO HANDICAP DI GIOCO SPETTANTE ---
+def calcola_playing_hcp_automatico(hcp_index, cr, sr, par, buche=18):
+  if buche == 9:
+    cr_eff = cr * 2 if cr < 50 else cr
+    par_eff = par * 2 if par < 50 else par
+    ch = (hcp_index * (sr / 113)) + (cr_eff - par_eff)
+    return max(0, round(ch / 2))
+  else:
+    ch = (hcp_index * (sr / 113)) + (cr - par)
+    return max(0, round(ch))
 
 
 # --- CALCOLO HANDICAP ---
@@ -444,53 +283,55 @@ if not df.empty and "SD" in df.columns:
     auto_cr = float(obj_percorso["Tees"][sel_tee]["CR"])
     auto_sr = float(obj_percorso["Tees"][sel_tee]["SR"])
 
+    # Calcolo automatico del Playing HCP per il campo selezionato
+    playing_hcp_suggerito = calcola_playing_hcp_automatico(
+        hcp_attuale, auto_cr, auto_sr, auto_par, auto_buche
+    )
+
     modalita = st.radio(
         "Modalità Inserimento Score:",
         ["Calcola da Punti Stableford", "Score Differential (SD) Manuale"],
         horizontal=True,
     )
 
-    with st.form("simulazione_form"):
-      nome_gara = st.text_input("Nome Gara Simulata", "Sunday Cup")
+    nome_gara = st.text_input("Nome Gara Simulata", "Sunday Cup")
 
-      col1, col2, col3, col4 = st.columns(4)
-      with col1:
-        st.text_input(
-            "Buche Campo", value=f"{auto_buche} buche", disabled=True
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+      st.text_input("Buche Campo", value=f"{auto_buche} buche", disabled=True)
+    with col2:
+      par = st.number_input("Par Campo", value=auto_par)
+    with col3:
+      cr = st.number_input("Course Rating (CR)", value=auto_cr)
+    with col4:
+      sr = st.number_input("Slope Rating (SR)", value=auto_sr)
+
+    pcc = st.number_input("PCC (-1.0 a +3.0)", value=0.0, step=0.5)
+
+    if modalita == "Calcola da Punti Stableford":
+      col3_s, col4_s = st.columns(2)
+      with col3_s:
+        stbl = st.number_input(
+            "Punti Stableford Realizzati",
+            value=36 if auto_buche == 18 else 18,
         )
-      with col2:
-        par = st.number_input("Par Campo", value=auto_par)
-      with col3:
-        cr = st.number_input("Course Rating (CR)", value=auto_cr)
-      with col4:
-        sr = st.number_input("Slope Rating (SR)", value=auto_sr)
-
-      pcc = st.number_input("PCC (-1.0 a +3.0)", value=0.0, step=0.5)
-
-      if modalita == "Calcola da Punti Stableford":
-        col3_s, col4_s = st.columns(2)
-        with col3_s:
-          stbl = st.number_input(
-              "Punti Stableford Realizzati",
-              value=36 if auto_buche == 18 else 18,
-          )
-        with col4_s:
-          playing_hcp = st.number_input(
-              "Playing HCP (Gara)", value=10.0 if auto_buche == 18 else 5.0
-          )
-        sd_simulato = calcola_sd_da_stableford(
-            stbl, playing_hcp, par, cr, sr, auto_buche, pcc
+      with col4_s:
+        playing_hcp = st.number_input(
+            "Playing HCP (Calcolato in base al tuo HCP Index)",
+            value=float(playing_hcp_suggerito),
         )
-        st.info(
-            f"💡 **Score Differential (SD) Calcolato ({sel_tee}):**"
-            f" `{sd_simulato}`"
-        )
-      else:
-        sd_simulato = st.number_input("SD Manuale", value=10.0, step=0.1)
 
-      submit_sim = st.form_submit_button("🧪 Esegui Simulazione")
+      sd_simulato = calcola_sd_da_stableford(
+          stbl, playing_hcp, par, cr, sr, auto_buche, pcc
+      )
+      st.info(
+          f"💡 **Score Differential (SD) Calcolato in Tempo Reale ({sel_tee}):**"
+          f" `{sd_simulato}`"
+      )
+    else:
+      sd_simulato = st.number_input("SD Manuale", value=10.0, step=0.1)
 
-    if submit_sim:
+    if st.button("🧪 Esegui Simulazione Handicap"):
       riga_sim = pd.DataFrame([{
           "Data": pd.Timestamp.now(),
           "Gara": f"[SIMULATA] {nome_gara}",
@@ -644,6 +485,10 @@ if not df.empty and "SD" in df.columns:
     r_cr = float(reg_obj_p["Tees"][reg_tee]["CR"])
     r_sr = float(reg_obj_p["Tees"][reg_tee]["SR"])
 
+    reg_playing_suggerito = calcola_playing_hcp_automatico(
+        hcp_attuale, r_cr, r_sr, r_par, r_buche
+    )
+
     with st.form("inserimento_definitivo"):
       col_a, col_b = st.columns(2)
       with col_a:
@@ -654,7 +499,7 @@ if not df.empty and "SD" in df.columns:
             "Punti Stableford", value=36 if r_buche == 18 else 18
         )
         g_playing = st.number_input(
-            "Playing HCP", value=10.0 if r_buche == 18 else 5.0
+            "Playing HCP", value=float(reg_playing_suggerito)
         )
 
       sd_calc_reg = calcola_sd_da_stableford(
