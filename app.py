@@ -2,6 +2,8 @@
 import os
 import pandas as pd
 import plotly.express as px
+from pdfminer.high_level import extract_pages
+from pdfminer.layout import LTTextContainer
 import streamlit as st
 
 st.set_page_config(
@@ -12,7 +14,161 @@ NOME_FILE_EXCEL = "Handicap_2026.xlsx"
 NOME_FILE_CAMPI = "campi.json"
 
 
-# --- CARICAMENTO E SALVATAGGIO DATI EXCEL ---
+# --- FUNZIONE DI PARSING AUTOMATICO DEL PDF FEDERGOLF ---
+def genera_json_da_pdf(pdf_path):
+  HEADER_WORDS = {
+      "TEE UOMINI",
+      "TEE DONNE",
+      "NERO",
+      "BIANCO",
+      "GIALLO",
+      "VERDE",
+      "BLU",
+      "ROSSO",
+      "ARANCIO",
+      "Circolo",
+      "Percorso",
+      "PAR",
+      "CR",
+      "Slope",
+      "Ci sono 911 percorsi.",
+  }
+  pages = list(extract_pages(pdf_path))
+  dataset = []
+  last_circolo = ""
+
+  for page in pages:
+    items = []
+    for element in page:
+      if isinstance(element, LTTextContainer):
+        t = element.get_text().strip()
+        if t and t not in HEADER_WORDS:
+          items.append({
+              "x0": element.bbox[0],
+              "y0": element.bbox[1],
+              "x1": element.bbox[2],
+              "y1": element.bbox[3],
+              "text": t,
+          })
+
+    data_items = [
+        it
+        for it in items
+        if it["y1"] < 765 and "TEE UOMINI" not in it["text"]
+    ]
+    data_items.sort(key=lambda item: -item["y1"])
+
+    rows = []
+    for item in data_items:
+      found = False
+      for row in rows:
+        if abs(row["y"] - item["y1"]) < 5:
+          row["items"].append(item)
+          found = True
+          break
+      if not found:
+        rows.append({"y": item["y1"], "items": [item]})
+
+    for row in rows:
+      row["items"].sort(key=lambda item: item["x0"])
+      circolo_parts, percorso_parts = [], []
+      par_val = None
+      tees_val = {}
+
+      for it in row["items"]:
+        x = it["x0"]
+        t = it["text"].replace("\n", " ").strip()
+
+        if x < 105 and not t.replace(".", "").isdigit():
+          circolo_parts.append(t)
+        elif 105 <= x < 175 and not t.replace(".", "").isdigit():
+          percorso_parts.append(t)
+        elif 175 <= x < 200 and t.isdigit():
+          try:
+            par_val = float(t)
+          except Exception:
+            pass
+        else:
+          try:
+            val = float(t)
+            if 200 <= x < 225:
+              tees_val.setdefault("Nero", {})["CR"] = val
+            elif 225 <= x < 255:
+              tees_val.setdefault("Nero", {})["SR"] = val
+            elif 255 <= x < 280:
+              tees_val.setdefault("Bianco", {})["CR"] = val
+            elif 280 <= x < 310:
+              tees_val.setdefault("Bianco", {})["SR"] = val
+            elif 310 <= x < 338:
+              tees_val.setdefault("Giallo", {})["CR"] = val
+            elif 338 <= x < 365:
+              tees_val.setdefault("Giallo", {})["SR"] = val
+            elif 365 <= x < 392:
+              tees_val.setdefault("Verde", {})["CR"] = val
+            elif 392 <= x < 420:
+              tees_val.setdefault("Verde", {})["SR"] = val
+            elif 420 <= x < 448:
+              tees_val.setdefault("Blu", {})["CR"] = val
+            elif 448 <= x < 475:
+              tees_val.setdefault("Blu", {})["SR"] = val
+            elif 475 <= x < 502:
+              tees_val.setdefault("Rosso", {})["CR"] = val
+            elif 502 <= x < 530:
+              tees_val.setdefault("Rosso", {})["SR"] = val
+            elif 530 <= x < 555:
+              tees_val.setdefault("Arancio", {})["CR"] = val
+            elif 555 <= x < 585:
+              tees_val.setdefault("Arancio", {})["SR"] = val
+          except Exception:
+            pass
+
+      c_name = " ".join(circolo_parts).strip()
+      p_name = " ".join(percorso_parts).strip()
+      if c_name:
+        last_circolo = c_name
+      else:
+        c_name = last_circolo
+
+      if c_name and par_val and tees_val:
+        buche = (
+            9
+            if (
+                "9" in p_name.lower()
+                or "nove" in p_name.lower()
+                or par_val < 50
+            )
+            else 18
+        )
+        valid_tees = {
+            k: v for k, v in tees_val.items() if "CR" in v and "SR" in v
+        }
+        if valid_tees:
+          dataset.append({
+              "Circolo": c_name,
+              "Percorso": p_name if p_name else "Percorso Standard",
+              "Buche": buche,
+              "Par": par_val,
+              "Tees": valid_tees,
+          })
+
+  seen = set()
+  dataset_unique = []
+  for d in dataset:
+    key = (
+        d["Circolo"],
+        d["Percorso"],
+        d["Buche"],
+        d["Par"],
+        json.dumps(d["Tees"], sort_keys=True),
+    )
+    if key not in seen:
+      seen.add(key)
+      dataset_unique.append(d)
+
+  return dataset_unique
+
+
+# --- CARICAMENTO DATI EXCEL ---
 @st.cache_data(ttl=1)
 def load_data():
   filename = None
@@ -34,7 +190,7 @@ def load_data():
     df_h1["Data"] = pd.to_datetime(df_h1["Data"])
     return df_h1
 
-  return df
+  return pd.DataFrame()
 
 
 def save_data(df_to_save):
@@ -46,12 +202,28 @@ def save_data(df_to_save):
   st.cache_data.clear()
 
 
-# --- ANAGRAFICA CAMPI DI GIOCO ---
+# --- ANAGRAFICA CAMPI CON CACHING PER EVITARE RALLENTAMENTI ---
+@st.cache_data
 def load_campi():
   if os.path.exists(NOME_FILE_CAMPI):
     try:
       with open(NOME_FILE_CAMPI, "r", encoding="utf-8") as f:
         return json.load(f)
+    except Exception:
+      pass
+
+  pdf_file = None
+  for f in os.listdir("."):
+    if f.endswith(".pdf"):
+      pdf_file = f
+      break
+
+  if pdf_file:
+    try:
+      campi_pdf = genera_json_da_pdf(pdf_file)
+      if campi_pdf:
+        save_campi(campi_pdf)
+        return campi_pdf
     except Exception:
       pass
 
@@ -75,7 +247,7 @@ def save_campi(campi_list):
     json.dump(campi_list, f, indent=2, ensure_ascii=False)
 
 
-# --- CALCOLO SD DA STABLEFORD ---
+# --- CALCOLI HANDICAP E SD ---
 def calcola_sd_da_stableford(
     stbl_points, playing_hcp, par, cr, sr, buche=18, pcc=0.0
 ):
@@ -92,7 +264,6 @@ def calcola_sd_da_stableford(
   return round(sd, 1)
 
 
-# --- CALCOLO HANDICAP DI GIOCO SPETTANTE ---
 def calcola_playing_hcp_automatico(hcp_index, cr, sr, par, buche=18):
   if buche == 9:
     cr_eff = cr * 2 if cr < 50 else cr
@@ -104,7 +275,6 @@ def calcola_playing_hcp_automatico(hcp_index, cr, sr, par, buche=18):
     return max(0, round(ch))
 
 
-# --- CALCOLO HANDICAP ---
 def calcola_hcp_corrente(df_in):
   if df_in.empty or "SD" not in df_in.columns:
     return 0.0, pd.DataFrame(), []
@@ -165,7 +335,6 @@ if not df.empty and "SD" in df.columns:
       miglior_hcp = df_trend["HCP_Storico"].min()
       st.metric("Miglior Handicap Storico", value=miglior_hcp)
 
-  # --- SCHEDE NAVIGAZIONE ---
   tab_dash, tab_sim, tab_campi, tab_reg = st.tabs([
       "📊 Dashboard & Trend HCP",
       "🔮 Simulazione Gara",
@@ -173,12 +342,9 @@ if not df.empty and "SD" in df.columns:
       "📋 Registro Gare Ufficiale",
   ])
 
-  # ==========================================
-  # TAB 1: DASHBOARD & TREND
-  # ==========================================
+  # TAB 1: DASHBOARD
   with tab_dash:
     st.subheader("📈 Trend Storico Handicap Index")
-
     if not df_trend.empty:
       fig = px.line(
           df_trend,
@@ -207,7 +373,6 @@ if not df.empty and "SD" in df.columns:
       st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("🟢 Ultimi 20 Risultati (Evidenziati i Migliori 8)")
-
     cols_b_h = [
         "Data",
         "Gara",
@@ -218,7 +383,6 @@ if not df.empty and "SD" in df.columns:
         "SD",
     ]
     cols_display = [c for c in cols_b_h if c in ultimi_20.columns]
-
     ultimi_20_show = ultimi_20.copy()
     if "Data" in ultimi_20_show.columns:
       ultimi_20_show["Data"] = pd.to_datetime(
@@ -237,16 +401,12 @@ if not df.empty and "SD" in df.columns:
         use_container_width=True,
     )
 
-  # ==========================================
-  # TAB 2: SIMULAZIONE GARA
-  # ==========================================
+  # TAB 2: SIMULAZIONE
   with tab_sim:
     st.subheader("🔮 Simula Impatto Prossima Gara")
-
     circoli_unici = sorted(list(set(c["Circolo"] for c in db_campi)))
 
     col_sel1, col_sel2, col_sel3 = st.columns(3)
-
     with col_sel1:
       idx_def_circolo = (
           circoli_unici.index("MONTEVEGLIO ASD")
@@ -283,7 +443,6 @@ if not df.empty and "SD" in df.columns:
     auto_cr = float(obj_percorso["Tees"][sel_tee]["CR"])
     auto_sr = float(obj_percorso["Tees"][sel_tee]["SR"])
 
-    # Calcolo automatico del Playing HCP per il campo selezionato
     playing_hcp_suggerito = calcola_playing_hcp_automatico(
         hcp_attuale, auto_cr, auto_sr, auto_par, auto_buche
     )
@@ -373,14 +532,26 @@ if not df.empty and "SD" in df.columns:
             f" del {data_scartato} (SD: {scartato['SD']})"
         )
 
-  # ==========================================
-  # TAB 3: ANAGRAFICA CAMPI DI GIOCO
-  # ==========================================
+  # TAB 3: ANAGRAFICA CAMPI E PULSANTE DOWNLOAD
+  with tab_dash:
+    pass
+
   with tab_campi:
     st.subheader("⛳ Anagrafica Campi di Gioco Federgolf")
     st.write(
         f"Attualmente memorizzati **{len(db_campi)} percorsi ufficiali**."
-        " Puoi modificare o aggiungere campi con i relativi Tee di partenza."
+    )
+
+    # Pulsante per scaricare il file JSON generato ed evitate ri-parsing futuri
+    st.download_button(
+        label="⬇️ Scarica campi.json per GitHub",
+        data=json.dumps(db_campi, indent=2, ensure_ascii=False),
+        file_name="campi.json",
+        mime="application/json",
+        help=(
+            "Scarica questo file e caricalo su GitHub per velocizzare l'avvio"
+            " dell'app"
+        ),
     )
 
     rows_editor = []
@@ -425,15 +596,9 @@ if not df.empty and "SD" in df.columns:
       st.success("Anagrafica campi salvata con successo!")
       st.rerun()
 
-  # ==========================================
-  # TAB 4: REGISTRO GARE & EDITOR EXCEL
-  # ==========================================
+  # TAB 4: REGISTRO GARE
   with tab_reg:
     st.subheader("📋 Registro Gare Ufficiale (Modifica Dati)")
-    st.write(
-        "Modifica direttamente le celle dell'Excel e salva i risultati."
-    )
-
     df_editable = df.copy()
     if "Data" in df_editable.columns:
       df_editable["Data"] = pd.to_datetime(df_editable["Data"]).dt.strftime(
@@ -532,7 +697,4 @@ if not df.empty and "SD" in df.columns:
         st.rerun()
 
 else:
-  st.error(
-      "File Excel non trovato. Assicurati che 'Handicap_2026.xlsx' sia presente"
-      " su GitHub."
-  )
+  st.error("File Excel non trovato. Assicurati che 'Handicap_2026.xlsx' sia su GitHub.")
